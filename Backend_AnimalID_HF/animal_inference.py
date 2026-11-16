@@ -37,7 +37,7 @@ class AnimalInferenceEngine:
 
         best = candidates[0] if candidates else None
         if not best or best["score"] < 0.50 or best["animal"] is None:
-            return self._abstention("Confiança abaixo de 50%; identificação recusada.", candidates)
+            return self._abstention("Confiança abaixo de 50% ou classe não biológica.", candidates)
 
         confidence = float(best["score"])
         return {
@@ -116,21 +116,52 @@ class AnimalInferenceEngine:
     def _animal_label(label: str) -> tuple[str | None, str]:
         value = label.lower()
         rules = {
-            "dog": ("Cachorro", "mammal"), "cat": ("Gato", "mammal"),
-            "frog": ("Sapo", "amphibian"), "cricket": ("Grilo", "insect"),
-            "bee": ("Abelha", "insect"), "wasp": ("Vespa", "insect"),
-            "mosquito": ("Mosquito", "insect"), "cicada": ("Cigarra", "insect"),
+            # Mamíferos e vocalizações
+            "dog": ("Cachorro", "mammal"), "bark": ("Cachorro", "mammal"),
+            "howl": ("Cachorro ou lobo", "mammal"), "cat": ("Gato", "mammal"),
+            "meow": ("Gato", "mammal"), "purr": ("Gato", "mammal"),
+            "hiss": ("Gato", "mammal"), "horse": ("Cavalo", "mammal"),
+            "cow": ("Bovino", "mammal"), "cattle": ("Bovino", "mammal"),
+            "moo": ("Bovino", "mammal"), "pig": ("Porco", "mammal"),
+            "sheep": ("Ovelha", "mammal"), "goat": ("Cabra", "mammal"),
+            "elephant": ("Elefante", "mammal"), "lion": ("Leão", "mammal"),
+            "tiger": ("Tigre", "mammal"), "monkey": ("Macaco", "mammal"),
+            "rodent": ("Roedor", "mammal"), "bat": ("Morcego", "mammal"),
+            # Aves e vocalizações
             "rooster": ("Galo", "bird"), "chicken": ("Galinha", "bird"),
             "duck": ("Pato", "bird"), "goose": ("Ganso", "bird"),
-            "bird": ("Ave não especificada", "bird"), "whale": ("Baleia", "marine"),
-            "dolphin": ("Golfinho", "marine"), "horse": ("Cavalo", "mammal"),
-            "cow": ("Bovino", "mammal"), "pig": ("Porco", "mammal"),
+            "crow": ("Corvo", "bird"), "owl": ("Coruja", "bird"),
+            "bird": ("Ave não especificada", "bird"),
+            # Anfíbios, répteis e vida marinha
+            "frog": ("Sapo", "amphibian"), "toad": ("Sapo", "amphibian"),
+            "snake": ("Serpente", "reptile"), "lizard": ("Lagarto", "reptile"),
+            "whale": ("Baleia", "marine"), "dolphin": ("Golfinho", "marine"),
+            # Insetos e artrópodes sonoros
+            "cricket": ("Grilo", "insect"), "bee": ("Abelha", "insect"),
+            "wasp": ("Vespa", "insect"), "mosquito": ("Mosquito", "insect"),
+            "cicada": ("Cigarra", "insect"), "fly": ("Mosca", "insect"),
+            "insect": ("Inseto não especificado", "insect"), "beetle": ("Besouro", "insect"),
+            "spider": ("Aranha", "arachnid"),
         }
         for keyword, mapped in rules.items():
             if keyword in value:
                 return mapped
-        if any(word in value for word in ("animal", "mammal", "wild animals", "domestic animals")):
-            return None, "unknown"
+        # Preserva classes biológicas do AudioSet ainda não traduzidas no
+        # dicionário acima, sem transformar rótulos genéricos em espécie.
+        biological_groups = (
+            (("mammal", "canidae", "feline", "bovine", "equine", "primate", "rodent"), "mammal"),
+            (("bird", "avian", "songbird", "waterfowl", "poultry"), "bird"),
+            (("insect", "arthropod", "crustacean"), "insect"),
+            (("amphibian", "amphib",), "amphibian"),
+            (("reptile", "reptilian"), "reptile"),
+            (("fish", "marine", "aquatic", "cetacean"), "marine"),
+            (("arachnid",), "arachnid"),
+        )
+        for keywords, group in biological_groups:
+            if any(keyword in value for keyword in keywords):
+                return label, group
+        # Sons humanos, música, veículos, chuva e ruídos não são competência
+        # deste aplicativo e devem ser descartados, não convertidos em animal.
         return None, "unknown"
 
     def _abstention(self, message: str, candidates: list[dict[str, Any]] | None = None) -> dict[str, Any]:

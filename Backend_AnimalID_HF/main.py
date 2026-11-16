@@ -14,7 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from animal_inference import AnimalInferenceEngine
 
-APP_VERSION = "1.0.0"
+APP_VERSION = "1.0.1"
 MAX_AUDIO_BYTES = 25 * 1024 * 1024
 
 app = FastAPI(title="AnimalID Universal Engine", version=APP_VERSION)
