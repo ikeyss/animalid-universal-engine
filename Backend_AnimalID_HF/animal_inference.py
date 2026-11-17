@@ -89,7 +89,8 @@ class AnimalInferenceEngine:
         output_detail = interpreter.get_output_details()[0]
         # Não usar máximo entre janelas: uma oscilação curta ou ruído de fundo
         # pode fazer YAMNet eleger gato/cachorro mesmo quando o som dominante é
-        # outro animal. A média das janelas representa o áudio inteiro.
+        # outro animal. A mediana representa o padrão recorrente do áudio e
+        # elimina picos isolados de uma janela.
         window_scores: list[np.ndarray] = []
         step = self.WINDOW // 2
         for offset in range(0, len(samples), step):
@@ -107,7 +108,7 @@ class AnimalInferenceEngine:
                 break
         if not window_scores:
             raise ValueError("Áudio curto demais.")
-        return np.mean(np.stack(window_scores, axis=0), axis=0)
+        return np.median(np.stack(window_scores, axis=0), axis=0)
 
     def _get_interpreter(self) -> Any:
         if self._interpreter is None:
