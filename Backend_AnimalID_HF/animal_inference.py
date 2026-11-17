@@ -36,14 +36,18 @@ class AnimalInferenceEngine:
             return self._abstention("Modelo acústico indisponível no servidor.")
 
         best = candidates[0] if candidates else None
-        if not best or best["score"] < 0.50 or best["animal"] is None:
-            return self._abstention("Confiança abaixo de 50% ou classe não biológica.", candidates)
+        scientific_name = self._scientific_name(best) if best else None
+        if not best or best["score"] < 0.50 or best["animal"] is None or not scientific_name:
+            return self._abstention(
+                "Confiança abaixo de 50%, classe não biológica ou espécie sem nome científico.",
+                candidates,
+            )
 
         confidence = float(best["score"])
         return {
             "identified": True,
             "animal": best["animal"],
-            "scientific_name": None,
+            "scientific_name": scientific_name,
             "group": best["group"],
             "confidence": confidence,
             "confidence_percent": int(confidence * 100),
@@ -111,6 +115,34 @@ class AnimalInferenceEngine:
             animal, group = self._animal_label(label)
             result.append({"label": label, "animal": animal, "group": group, "score": float(scores[index])})
         return result
+
+    @staticmethod
+    def _scientific_name(candidate: dict[str, Any]) -> str | None:
+        """Retorna nome científico somente para rótulos suficientemente específicos.
+
+        YAMNet também retorna grupos genéricos (por exemplo, "Bird" ou
+        "Insect"). Esses grupos não são espécies e nunca devem entrar no
+        catálogo como se fossem nomes científicos.
+        """
+        label = str(candidate.get("label", "")).lower()
+        animal = str(candidate.get("animal", "")).lower()
+        value = f"{label} {animal}"
+        rules = (
+            (("cat", "meow", "purr", "hiss", "gato"), "Felis catus"),
+            (("dog", "bark", "yip", "growl", "cachorro"), "Canis lupus familiaris"),
+            (("horse", "neigh", "whinny", "cavalo"), "Equus ferus caballus"),
+            (("cow", "cattle", "moo", "bovino"), "Bos taurus"),
+            (("pig", "oink", "porco"), "Sus scrofa domesticus"),
+            (("sheep", "ovelha"), "Ovis aries"),
+            (("goat", "cabra"), "Capra hircus"),
+            (("elephant", "elefante"), "Loxodonta africana"),
+            (("lion", "leão", "leao"), "Panthera leo"),
+            (("tiger", "tigre"), "Panthera tigris"),
+            (("rooster", "chicken", "crowing", "galo", "galinha"), "Gallus gallus domesticus"),
+            (("duck", "pato"), "Anas platyrhynchos"),
+            (("goose", "ganso"), "Anser anser"),
+        )
+        return next((scientific for keywords, scientific in rules if any(k in value for k in keywords)), None)
 
     @staticmethod
     def _animal_label(label: str) -> tuple[str | None, str]:
