@@ -37,9 +37,25 @@ class AnimalInferenceEngine:
 
         best = candidates[0] if candidates else None
         scientific_name = self._scientific_name(best) if best else None
-        if not best or best["score"] < 0.50 or best["animal"] is None or not scientific_name:
+        animal_candidates = [candidate for candidate in candidates if candidate["animal"] is not None]
+        runner_up = animal_candidates[1] if len(animal_candidates) > 1 else None
+        # Se duas espécies diferentes têm pontuação praticamente igual, não
+        # escolher uma arbitrariamente. Isso evita transformar vaca em gato,
+        # cachorro em raposa etc. por causa de ruído ou áudio reproduzido.
+        ambiguous = (
+            runner_up is not None
+            and runner_up["animal"] != best["animal"]
+            and float(best["score"]) - float(runner_up["score"]) < 0.08
+        ) if best else False
+        if (
+            not best
+            or best["score"] < 0.50
+            or best["animal"] is None
+            or not scientific_name
+            or ambiguous
+        ):
             return self._abstention(
-                "Confiança abaixo de 50%, classe não biológica ou espécie sem nome científico.",
+                "Áudio ambíguo, confiança abaixo de 50%, classe não biológica ou espécie sem nome científico.",
                 candidates,
             )
 
@@ -71,7 +87,10 @@ class AnimalInferenceEngine:
         interpreter = self._get_interpreter()
         input_detail = interpreter.get_input_details()[0]
         output_detail = interpreter.get_output_details()[0]
-        pooled: np.ndarray | None = None
+        # Não usar máximo entre janelas: uma oscilação curta ou ruído de fundo
+        # pode fazer YAMNet eleger gato/cachorro mesmo quando o som dominante é
+        # outro animal. A média das janelas representa o áudio inteiro.
+        window_scores: list[np.ndarray] = []
         step = self.WINDOW // 2
         for offset in range(0, len(samples), step):
             window = np.zeros(self.WINDOW, dtype=np.float32)
@@ -83,12 +102,12 @@ class AnimalInferenceEngine:
             if raw.ndim >= 2:
                 raw = raw.reshape(-1, raw.shape[-1]).mean(axis=0)
             raw = raw.reshape(-1)
-            pooled = raw if pooled is None else np.maximum(pooled, raw)
+            window_scores.append(raw)
             if offset + self.WINDOW >= len(samples):
                 break
-        if pooled is None:
+        if not window_scores:
             raise ValueError("Áudio curto demais.")
-        return pooled
+        return np.mean(np.stack(window_scores, axis=0), axis=0)
 
     def _get_interpreter(self) -> Any:
         if self._interpreter is None:
